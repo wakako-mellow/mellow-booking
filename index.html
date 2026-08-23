@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>beauty salon mellow ご予約</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      background: #faf7f4;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    .card {
+      max-width: 480px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    h1 {
+      font-size: 18px;
+      text-align: center;
+      margin-bottom: 4px;
+      color: #6b4f3f;
+    }
+    p.sub {
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+      margin-top: 0;
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: bold;
+      margin: 16px 0 6px;
+    }
+    select, input[type="text"], input[type="tel"], input[type="date"], textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    textarea { resize: vertical; min-height: 60px; }
+    .slots {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .slot-btn {
+      padding: 8px 12px;
+      border: 1px solid #c9a988;
+      border-radius: 20px;
+      background: #fff;
+      color: #6b4f3f;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .slot-btn.selected {
+      background: #c9a988;
+      color: #fff;
+    }
+    .empty-msg {
+      font-size: 13px;
+      color: #999;
+      margin-top: 8px;
+    }
+    button.submit {
+      width: 100%;
+      margin-top: 24px;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      background: #6b4f3f;
+      color: #fff;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button.submit:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .result {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+    .loading {
+      text-align: center;
+      font-size: 13px;
+      color: #999;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+  <div class="card">
+    <h1>beauty salon mellow</h1>
+    <p class="sub">ご予約フォーム</p>
+
+    <div id="liffLoading" style="text-align:center; font-size:13px; color:#999;">読み込み中…</div>
+
+    <div id="formArea" style="display:none;">
+      <label>お名前<span style="color:red;">*</span></label>
+      <input type="text" id="name" placeholder="山田 花子">
+
+      <label>電話番号<span style="color:red;">*</span></label>
+      <input type="tel" id="phone" placeholder="09012345678">
+
+      <label>ご希望のコース<span style="color:red;">*</span></label>
+      <select id="course">
+        <option value="">選択してください</option>
+      </select>
+
+      <label>ご希望日<span style="color:red;">*</span></label>
+      <input type="date" id="date">
+
+      <label>ご希望のお時間<span style="color:red;">*</span></label>
+      <div id="slotsArea">
+        <p class="empty-msg">コースと日付を選ぶと、空いている時間が表示されます</p>
+      </div>
+
+      <label>初めてのご来店ですか？</label>
+      <select id="firstVisit">
+        <option value="はじめて">はじめて</option>
+        <option value="2回目以降">2回目以降</option>
+      </select>
+
+      <label>ご要望・気になること(任意)</label>
+      <textarea id="note" placeholder="髪の悩みや気になる点があればご記入ください"></textarea>
+
+      <button class="submit" id="submitBtn" onclick="submitBooking()" disabled>この内容で予約する</button>
+      <div id="loadingMsg" class="loading" style="display:none;">処理中です…</div>
+    </div>
+
+    <div id="resultArea" class="result" style="display:none;"></div>
+  </div>
