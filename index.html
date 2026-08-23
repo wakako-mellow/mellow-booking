@@ -89,3 +89,231 @@
       cursor: not-allowed;
     }
     .result {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+    .loading {
+      text-align: center;
+      font-size: 13px;
+      color: #999;
+      margin-top: 8px;
+    }
+  </style>
+</head><body>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+  <div class="card">
+    <h1>beauty salon mellow</h1>
+    <p class="sub">ご予約フォーム</p>
+
+    <div id="liffLoading" style="text-align:center; font-size:13px; color:#999;">読み込み中…</div>
+
+    <div id="formArea" style="display:none;">
+      <label>お名前<span style="color:red;">*</span></label>
+      <input type="text" id="name" placeholder="山田 花子">
+
+      <label>電話番号<span style="color:red;">*</span></label>
+      <input type="tel" id="phone" placeholder="09012345678">
+
+      <label>ご希望のコース<span style="color:red;">*</span></label>
+      <select id="course">
+        <option value="">選択してください</option>
+      </select>
+
+      <label>ご希望日<span style="color:red;">*</span></label>
+      <input type="date" id="date">
+
+      <label>ご希望のお時間<span style="color:red;">*</span></label>
+      <div id="slotsArea">
+        <p class="empty-msg">コースと日付を選ぶと、空いている時間が表示されます</p>
+      </div>
+
+      <label>初めてのご来店ですか？</label>
+      <select id="firstVisit">
+        <option value="はじめて">はじめて</option>
+        <option value="2回目以降">2回目以降</option>
+      </select>
+
+      <label>ご要望・気になること(任意)</label>
+      <textarea id="note" placeholder="髪の悩みや気になる点があればご記入ください"></textarea>
+
+      <button class="submit" id="submitBtn" onclick="submitBooking()" disabled>この内容で予約する</button>
+      <div id="loadingMsg" class="loading" style="display:none;">処理中です…</div>
+    </div>
+
+    <div id="resultArea" class="result" style="display:none;"></div>
+  </div>
+
+  <script>
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbzIc4e-LvM7YXFSr40NdXIsoN_-qT8Pwq-R8XIJYho8aXYmU_esU67sG9AcP2KurmkC/exec';
+    const LIFF_ID = '2011185585-vnKlSg4q';
+
+    let courses = [];
+    let selectedTime = null;
+    let lineUserId = null;
+
+    let formShown = false;
+    function showFormOnce() {
+      if (formShown) return;
+      formShown = true;
+      initForm();
+    }
+    setTimeout(showFormOnce, 6000);
+
+    liff.init({ liffId: LIFF_ID })
+      .then(function () {
+        if (liff.isLoggedIn()) {
+          return liff.getProfile();
+        }
+        if (liff.isInClient()) {
+          liff.login();
+        }
+        return null;
+      })
+      .then(function (profile) {
+        if (profile) {
+          lineUserId = profile.userId;
+        }
+        showFormOnce();
+      })
+      .catch(function () {
+        showFormOnce();
+      });
+
+    function initForm() {
+      document.getElementById('liffLoading').style.display = 'none';
+      document.getElementById('formArea').style.display = 'block';
+    }
+
+    fetch(GAS_URL + '?action=getCourses')
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        courses = data;
+        const select = document.getElementById('course');
+        data.forEach(function (c) {
+          const opt = document.createElement('option');
+          opt.value = c.name;
+          opt.textContent = c.name + '(' + minutesToLabel(c.minutes) + ')';
+          select.appendChild(opt);
+        });
+      });
+
+    document.getElementById('course').addEventListener('change', refreshSlots);
+    document.getElementById('date').addEventListener('change', refreshSlots);
+
+    function minutesToLabel(m) {
+      if (m % 60 === 0) return (m / 60) + '時間';
+      return Math.floor(m / 60) + '時間' + (m % 60) + '分';
+    }
+
+    function getSelectedCourseMinutes() {
+      const name = document.getElementById('course').value;
+      const found = courses.find(function (c) { return c.name === name; });
+      return found ? found.minutes : null;
+    }
+
+    function refreshSlots() {
+      const courseName = document.getElementById('course').value;
+      const dateStr = document.getElementById('date').value;
+      const slotsArea = document.getElementById('slotsArea');
+      selectedTime = null;
+      updateSubmitState();
+
+      if (!courseName || !dateStr) {
+        slotsArea.innerHTML = '<p class="empty-msg">コースと日付を選ぶと、空いている時間が表示されます</p>';
+        return;
+      }
+
+      slotsArea.innerHTML = '<p class="empty-msg">空き時間を確認中…</p>';
+      const minutes = getSelectedCourseMinutes();
+
+      fetch(GAS_URL + '?action=getAvailableSlots&date=' + encodeURIComponent(dateStr) + '&minutes=' + minutes)
+        .then(function (res) { return res.json(); })
+        .then(function (slots) {
+          if (slots.length === 0) {
+            slotsArea.innerHTML = '<p class="empty-msg">申し訳ございません、その日は空きがありません(定休日または満枠)。別の日をお選びください。</p>';
+            return;
+          }
+          const wrap = document.createElement('div');
+          wrap.className = 'slots';
+          slots.forEach(function (t) {
+            const btn = document.createElement('div');
+            btn.className = 'slot-btn';
+            btn.textContent = t;
+            btn.onclick = function () {
+              document.querySelectorAll('.slot-btn').forEach(function (b) { b.classList.remove('selected'); });
+              btn.classList.add('selected');
+              selectedTime = t;
+              updateSubmitState();
+            };
+            wrap.appendChild(btn);
+          });
+          slotsArea.innerHTML = '';
+          slotsArea.appendChild(wrap);
+        });
+    }
+
+    function updateSubmitState() {
+      const name = document.getElementById('name').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      const course = document.getElementById('course').value;
+      const date = document.getElementById('date').value;
+      const ok = name && phone && course && date && selectedTime;
+      document.getElementById('submitBtn').disabled = !ok;
+    }
+
+    ['name', 'phone', 'course', 'date'].forEach(function (id) {
+      document.getElementById(id).addEventListener('input', updateSubmitState);
+      document.getElementById(id).addEventListener('change', updateSubmitState);
+    });
+
+    function submitBooking() {
+      const courseName = document.getElementById('course').value;
+      const minutes = getSelectedCourseMinutes();
+
+      const data = {
+        name: document.getElementById('name').value.trim(),
+        phone: document.getElementById('phone').value.trim(),
+        course: courseName,
+        minutes: minutes,
+        date: document.getElementById('date').value,
+        time: selectedTime,
+        firstVisit: document.getElementById('firstVisit').value,
+        note: document.getElementById('note').value.trim(),
+        lineUserId: lineUserId,
+      };
+
+      document.getElementById('submitBtn').disabled = true;
+      document.getElementById('loadingMsg').style.display = 'block';
+
+      fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'bookAppointment', data: data }),
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (res) {
+          document.getElementById('loadingMsg').style.display = 'none';
+          document.getElementById('formArea').style.display = 'none';
+          const resultArea = document.getElementById('resultArea');
+          resultArea.style.display = 'block';
+          resultArea.textContent = res.message;
+          if (!res.success) {
+            setTimeout(function () {
+              document.getElementById('formArea').style.display = 'block';
+              resultArea.style.display = 'none';
+              refreshSlots();
+            }, 2500);
+          }
+        })
+        .catch(function (err) {
+          document.getElementById('loadingMsg').style.display = 'none';
+          alert('エラーが発生しました。もう一度お試しください。');
+          document.getElementById('submitBtn').disabled = false;
+        });
+    }
+  </script>
+</body>
+</html>
