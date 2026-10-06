@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>ご予約のキャンセル | beauty salon mellow</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      background: #faf7f4;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    .card {
+      max-width: 480px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    h1 { font-size: 18px; text-align: center; margin: 0 0 4px; color: #6b4f3f; }
+    p.sub { text-align: center; font-size: 12px; color: #999; margin: 0 0 20px; }
+    .loading { text-align: center; font-size: 13px; color: #999; }
+    .info { background: #faf7f4; border-radius: 12px; padding: 4px 16px; margin-bottom: 16px; }
+    .row { padding: 12px 0; border-bottom: 1px solid #eee; }
+    .row:last-child { border-bottom: none; }
+    .row .k { font-size: 12px; color: #999; margin-bottom: 2px; }
+    .row .v { font-size: 15px; font-weight: bold; }
+    .note { font-size: 13px; line-height: 1.7; margin: 12px 0; }
+    .note.warn { color: #a05a2c; }
+    .note.err { color: #c0392b; }
+    .note.done { color: #2e7d32; text-align: center; font-size: 15px; font-weight: bold; }
+    button.cancel {
+      width: 100%;
+      margin-top: 8px;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      background: #c0392b;
+      color: #fff;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button.cancel:disabled { background: #ccc; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>beauty salon mellow</h1>
+    <p class="sub">ご予約のキャンセル</p>
+    <div id="loading" class="loading">確認中…</div>
+    <div id="content" style="display:none;"></div>
+  </div>
+
+  <script>
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbzIc4e-LvM7YXFSr40NdXIsoN_-qT8Pwq-R8XIJYho8aXYmU_esU67sG9AcP2KurmkC/exec';
+    const token = new URLSearchParams(location.search).get('t');
+
+    // お名前などはお客様の入力なので、必ず textContent で表示する(HTMLとして解釈させない)
+    function el(tag, className, text) {
+      const e = document.createElement(tag);
+      if (className) e.className = className;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+
+    function show(nodes) {
+      const box = document.getElementById('content');
+      box.textContent = '';
+      nodes.forEach(function (n) { box.appendChild(n); });
+      document.getElementById('loading').style.display = 'none';
+      box.style.display = 'block';
+    }
+
+    function showError(text) {
+      show([el('p', 'note err', text)]);
+    }
+
+    function infoBox(b) {
+      const box = el('div', 'info');
+      [['お名前', b.name + ' 様'], ['コース', b.course], ['ご予約日時', b.dateLabel + ' ' + b.timeLabel]].forEach(function (p) {
+        const r = el('div', 'row');
+        r.appendChild(el('div', 'k', p[0]));
+        r.appendChild(el('div', 'v', p[1]));
+        box.appendChild(r);
+      });
+      return box;
+    }
+
+    function render(b) {
+      if (!b || !b.found) {
+        showError((b && b.message) || 'ご予約が見つかりませんでした。リンクをご確認ください。');
+        return;
+      }
+
+      const nodes = [infoBox(b)];
+
+      if (b.canceled) {
+        nodes.push(el('p', 'note done', 'このご予約はキャンセル済みです。'));
+      } else if (b.past) {
+        nodes.push(el('p', 'note warn', 'ご予約の日時を過ぎています。'));
+      } else if (b.canCancel) {
+        nodes.push(el('p', 'note', b.deadlineLabel + 'まで、こちらからキャンセルできます。'));
+        const btn = el('button', 'cancel', 'このご予約をキャンセルする');
+        btn.type = 'button';
+        btn.addEventListener('click', function () { doCancel(btn); });
+        nodes.push(btn);
+        nodes.push(el('p', 'note', '日時を変更したい場合は、一度キャンセルしていただき、あらためてご予約をお願いします。'));
+      } else {
+        nodes.push(el('p', 'note warn', 'キャンセルできる期限(' + b.deadlineLabel + ')を過ぎています。お手数ですが、公式LINEのトークに直接メッセージをお願いします。'));
+      }
+      show(nodes);
+    }
+
+    function doCancel(btn) {
+      if (!window.confirm('このご予約をキャンセルします。よろしいですか?')) return;
+      btn.disabled = true;
+      btn.textContent = '処理中…';
+
+      fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'cancelBooking', token: token }),
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (res) {
+          if (res.success) {
+            show([
+              el('p', 'note done', res.already ? 'このご予約はすでにキャンセル済みです。' : 'キャンセルを承りました。'),
+              el('p', 'note', 'またのご利用を心よりお待ちしております。'),
+            ]);
+          } else {
+            btn.disabled = false;
+            btn.textContent = 'このご予約をキャンセルする';
+            showError(res.message || 'キャンセルできませんでした。お手数ですが、公式LINEのトークに直接メッセージをお願いします。');
+          }
+        })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = 'このご予約をキャンセルする';
+          window.alert('通信に失敗しました。電波の良いところで、もう一度お試しください。');
+        });
+    }
+
+    if (!token) {
+      showError('キャンセル用のリンクが正しくありません。予約完了のLINEメッセージにあるリンクからお開きください。');
+    } else {
+      fetch(GAS_URL + '?action=getBooking&token=' + encodeURIComponent(token))
+        .then(function (res) { return res.json(); })
+        .then(render)
+        .catch(function () {
+          showError('読み込みに失敗しました。時間をおいて、もう一度お試しください。');
+        });
+    }
+  </script>
+</body>
+</html>
